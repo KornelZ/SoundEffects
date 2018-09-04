@@ -47,7 +47,7 @@ class Echo(Effect):
         decays = np.linspace(self.decay, Echo.MIN_VOLUME, self.repeats)
         for i in range(signal.shape[0]):
             for j in range(self.repeats):
-                if i + (samples_to_delay * j) > new_signal.shape[0] and not self.prolong:
+                if i + (samples_to_delay * j) >= new_signal.shape[0] and not self.prolong:
                     break
                 new_signal[i + (samples_to_delay * j)] += int(signal[i] * decays[j])
         return new_signal
