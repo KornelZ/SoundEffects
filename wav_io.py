@@ -12,7 +12,7 @@ def read_file(path):
     log = logging.getLogger(Config.LOG_NAME)
     log.info("In read_file: path %s", path)
     sample_rate, signal = scipy.io.wavfile.read(path)
-    if signal.shape[1] != 1:
+    if len(signal.shape) != 1:
         raise ValueError("Signal shape cannot be > 1")
     return signal, sample_rate
 
