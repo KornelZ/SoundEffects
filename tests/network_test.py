@@ -1,5 +1,4 @@
-import rnn
-import network_util
+from networks import network_util, rnn
 import numpy as np
 
 def rnn_test():

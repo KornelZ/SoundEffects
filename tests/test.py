@@ -1,5 +1,5 @@
-import wav_io
-from features import FeatureExtractor
+from file_io import wav_io
+from preproc.features import FeatureExtractor
 
 """
 def read_wav(path):

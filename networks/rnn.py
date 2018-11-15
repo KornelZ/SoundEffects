@@ -1,6 +1,6 @@
-import numpy as np
 import tensorflow as tf
-import network_util
+from networks import network_util
+
 
 class Rnn(object):
 
