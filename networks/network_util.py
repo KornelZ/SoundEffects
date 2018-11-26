@@ -1,9 +1,6 @@
 import tensorflow as tf
 import numpy as np
 
-SEQ_MULT = 2
-
-
 def get_true_sequence_length(sequence, axis):
     correct = tf.sign(tf.abs(sequence))
     seq_len = tf.reduce_sum(correct, reduction_indices=axis)
@@ -24,3 +21,13 @@ def transpose_to_last_values(sequence, length):
 def one_hot_encode(labels, num_classes):
     x = np.asarray(labels)
     return np.eye(num_classes, dtype=np.float32)[x]
+
+def batch(data, labels, batch_size):
+    perm = np.random.permutation(len(labels))
+    data = data[perm, :]
+    labels = labels[perm]
+    for i in range(0, len(labels), batch_size):
+        if i + batch_size >= len(labels):
+            yield data[i:, :], labels[i:]
+        else:
+            yield data[i:i+batch_size, :], labels[i:i+batch_size]
