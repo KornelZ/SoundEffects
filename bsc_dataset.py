@@ -1,10 +1,11 @@
 from file_io import wav_io
 from preproc import features
 from networks import rnn, network_util
+from plots import confusion_matrix
 import numpy as np
 import os
 
-PATH = "F:\\SpeechDatasets\\data\\close"
+PATH = "F:\\SpeechDatasets\\data\\algorithm"
 dirs = [os.path.join(PATH, p) for p in os.listdir(PATH)]
 dirs = [(p, os.listdir(p)) for p in dirs]
 dirs = [[os.path.join(path, filename) for filename in filenames]
@@ -23,7 +24,7 @@ feat_extractor = features.FeatureExtractor(
     low_freq=0
 )
 speakers = []
-n = 100
+n = 300
 max = 0
 
 def pad(a, n):
@@ -60,14 +61,14 @@ speakers = [y for x in speakers for y in x]
 speakers_t = [y for x in speakers_t for y in x]
 print(len(speakers))
 speaker_arr = np.stack(speakers, axis=0)
-speaker_test_arr = np.stack(speakers_t, axis=0)
+speaker_valid_arr = np.stack(speakers_t, axis=0)
 
 net = rnn.Rnn(
         num_inputs=13,
         num_classes=i,
         layers=[256, 128],
         dropout=0.6,
-        epochs=400,
+        epochs=100,
         l2_coef=0.01,
         learning_rate=0.001,
         batch_size=8,
@@ -79,13 +80,14 @@ input = speaker_arr
 
 labels = network_util.one_hot_encode(np.array(labels),
                                      num_classes=i)
-labels_t = network_util.one_hot_encode(np.array(labels_t), num_classes=i)
+valid_labels = network_util.one_hot_encode(np.array(labels_t), num_classes=i)
 perm = np.random.permutation(len(labels))
 labels = labels[perm]
 input = input[perm, :]
 net.build()
-net.train(input, labels, speaker_test_arr, labels_t)
-
+acc, epoch, pred = net.train(input, labels, speaker_valid_arr, valid_labels)
+confusion_matrix(pred, labels_t, i)
+net.close()
 #net.test(input[size:], labels[size:], model_path="tmp/model.tf-1000.meta")
 
 

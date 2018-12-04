@@ -22,6 +22,7 @@ class Rnn(object):
         self.x = None
         self.y = None
         self.sequence_length = None
+        self.dropout_keep_prob = None
         self.weight = None
         self.bias = None
         self.net = None
@@ -33,9 +34,9 @@ class Rnn(object):
         self.session = None
         self.saver = None
 
-    def _save(self, session):
+    def _save(self, session, epoch):
         if self.save_model:
-            self.saver.save(session, self.save_path, self.epochs)
+            self.saver.save(session, self.save_path, epoch)
 
     def _load(self, session, model_path):
         if model_path is not None:
@@ -45,6 +46,7 @@ class Rnn(object):
     def train(self, train_data, train_labels, valid_data, valid_labels, plot_result=True):
         best_acc = 0
         best_epoch = 0
+        best_result = None
         loss_hist = []
         acc_hist = []
         for epoch in range(self.epochs):
@@ -82,10 +84,13 @@ class Rnn(object):
                 if best_acc < test_accuracy:
                     best_acc = test_accuracy
                     best_epoch = epoch
+                    best_result = result
+                    self._save(self.session, epoch)
                 print("Best acc: {} at step {}".format(best_acc, best_epoch + 1))
         if plot_result:
             plots.plot_epochs(self.epochs, loss_hist, 'r--')
             plots.plot_epochs(self.epochs, acc_hist, 'b--')
+        return best_acc, best_epoch, best_result
 
     def test(self, test_data, test_labels, model_path):
         with tf.Session() as session:
@@ -156,7 +161,11 @@ class Rnn(object):
             self.session = tf.Session()
             with self.session.as_default():
                 self.session.run(tf.global_variables_initializer())
-                self._save(self.session)
+
+    def close(self):
+        if self.session is not None:
+            self.session.close()
+            self.session = None
 
 
 
