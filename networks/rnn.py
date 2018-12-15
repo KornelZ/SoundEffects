@@ -49,6 +49,7 @@ class Rnn(object):
         best_result = None
         loss_hist = []
         acc_hist = []
+        best_top_5 = 0
         for epoch in range(self.epochs):
             accuracy = 0
             loss = 0
@@ -75,20 +76,22 @@ class Rnn(object):
                     self.y: valid_labels,
                     self.dropout_keep_prob: 1
                 }
-                _, result, test_accuracy = self.session.run(
-                    [self.net, self.predictions, self.accuracy], feed_dict
+                _, result, test_loss, test_accuracy, top_5 = self.session.run(
+                    [self.net, self.predictions, self.loss, self.accuracy, self.top_5], feed_dict
                 )
-                loss_hist.append(loss)
+                loss_hist.append((loss, test_loss))
                 acc_hist.append(test_accuracy)
-                print("Validation accuracy:", test_accuracy)
+                print("Validation accuracy: {}, loss {}".format(test_accuracy, test_loss))
                 if best_acc < test_accuracy:
                     best_acc = test_accuracy
                     best_epoch = epoch
                     best_result = result
+                    best_top_5 = top_5
                     self._save(self.session, epoch)
-                print("Best acc: {} at step {}".format(best_acc, best_epoch + 1))
+
+                print("Best acc: {} at step {}, top 5 {}".format(best_acc, best_epoch + 1, best_top_5))
         if plot_result:
-            plots.plot_epochs(self.epochs, loss_hist, 'r--')
+            plots.plot_epochs(self.epochs, loss_hist, ['r--', 'g--'])
             plots.plot_epochs(self.epochs, acc_hist, 'b--')
         return best_acc, best_epoch, best_result
 
@@ -115,7 +118,7 @@ class Rnn(object):
                 shape=[None, self.max_seq_len, self.num_inputs],
             )
             self.sequence_length = network_util.get_true_sequence_length(self.x, axis=1)
-            self.y = tf.placeholder(tf.float32,
+            self.y = tf.placeholder(tf.int64,
                 shape=[None, self.num_classes],
             )
 
@@ -151,14 +154,17 @@ class Rnn(object):
             self.accuracy = tf.reduce_mean(
                 tf.cast(tf.equal(self.predictions, tf.argmax(self.y, axis=1)), dtype=tf.float32)
             )
+            self.top_5 = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.net, tf.argmax(self.y, axis=1), 5), dtype=tf.float32))
             self.global_step = tf.Variable(0, trainable=False)
-            self.optimizer = tf.train.AdamOptimizer(self.learning_rate)\
+            self.optimizer = tf.train.AdagradOptimizer(self.learning_rate)\
                 .minimize(self.loss, global_step=self.global_step)
             #gvs, var = zip(*self.optimizer.compute_gradients(self.loss))
             #gvs, _ = tf.clip_by_global_norm(gvs, 5.0)
             #self.optimizer = self.optimizer.apply_gradients(zip(gvs, var), global_step=self.global_step)
             self.saver = tf.train.Saver()
-            self.session = tf.Session()
+            config = tf.ConfigProto()
+            config.gpu_options.allow_growth = True
+            self.session = tf.Session(config=config)
             with self.session.as_default():
                 self.session.run(tf.global_variables_initializer())
 

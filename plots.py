@@ -4,7 +4,11 @@ import itertools
 
 def plot_epochs(epochs, y, line):
     ep = np.arange(0, epochs)
-    plt.plot(ep, y, line)
+    if hasattr(y[0], '__len__'):
+        for i in range(len(y[0])):
+            plt.plot(ep, [val[i] for val in y], line[i])
+    else:
+        plt.plot(ep, y, line)
     plt.show()
 
 def confusion_matrix(pred, labels, num_classes):
