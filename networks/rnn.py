@@ -7,6 +7,20 @@ class Rnn(object):
 
     def __init__(self, num_inputs, num_classes, layers, dropout, epochs, l2_coef,
                  learning_rate, batch_size, save_model, save_path, max_seq_len):
+        """
+        Inits Rnn parameters
+        :param num_inputs: size of input vector features
+        :param num_classes: size of output vector classes
+        :param layers: list of LSTM layer sizes
+        :param dropout: keep probability for LSTM dropout
+        :param epochs: num of training iterations
+        :param l2_coef: L2 loss multiplier
+        :param learning_rate: (prefered 0.001)
+        :param batch_size: (prefered 8)
+        :param save_model: if True then saves model to disk
+        :param save_path: model save path
+        :param max_seq_len: maximum length of input sequence
+        """
         self.num_inputs = num_inputs
         self.num_classes = num_classes
         self.layers = layers
@@ -44,6 +58,15 @@ class Rnn(object):
             self.saver.restore(session, tf.train.latest_checkpoint("tmp/")) #pass config path?
 
     def train(self, train_data, train_labels, valid_data, valid_labels, plot_result=True):
+        """
+        Trains and validates model, return epoch and accuracy of best validation
+        :param train_data:
+        :param train_labels:
+        :param valid_data:
+        :param valid_labels:
+        :param plot_result: if True then plots loss/accuracy
+        :return: best epoch and its accuracy and result
+        """
         best_acc = 0
         best_epoch = 0
         best_result = None
@@ -96,6 +119,13 @@ class Rnn(object):
         return best_acc, best_epoch, best_result
 
     def test(self, test_data, test_labels, model_path):
+        """
+        Load model from model_path and tests data
+        :param test_data:
+        :param test_labels:
+        :param model_path:
+        :return result of testing and accuracy:
+        """
         with tf.Session() as session:
             self._load(session, model_path)
             feed_dict = {
@@ -111,6 +141,10 @@ class Rnn(object):
         return result, test_accuracy
 
     def build(self):
+        """
+        Builds neural network and starts session
+        :return:
+        """
         graph = tf.Graph()
         with graph.as_default():
 
@@ -123,6 +157,7 @@ class Rnn(object):
             )
 
             self.dropout_keep_prob = tf.placeholder(tf.float32, shape=())
+            """Last layer weights and bias"""
             self.weight = {
                 "out": tf.Variable(tf.truncated_normal(
                     [self.layers[-1], self.num_classes]
@@ -162,6 +197,7 @@ class Rnn(object):
             #gvs, _ = tf.clip_by_global_norm(gvs, 5.0)
             #self.optimizer = self.optimizer.apply_gradients(zip(gvs, var), global_step=self.global_step)
             self.saver = tf.train.Saver()
+            #Windows GPU crash fix
             config = tf.ConfigProto()
             config.gpu_options.allow_growth = True
             self.session = tf.Session(config=config)
@@ -169,6 +205,10 @@ class Rnn(object):
                 self.session.run(tf.global_variables_initializer())
 
     def close(self):
+        """
+        Call after end of calculation
+        :return:
+        """
         if self.session is not None:
             self.session.close()
             self.session = None

@@ -6,6 +6,12 @@ class DTW(object):
         self.vectors = []
 
     def _distance(self, a, b):
+        """
+        Calculates edit distance between two matrices (second norm of vector)
+        :param a:
+        :param b:
+        :return:
+        """
         dist_matrix = np.ndarray((a.shape[0] + 1, b.shape[0] + 1))
         dist_matrix.fill(np.finfo(np.float32).max)
         dist_matrix[0, 0] = 0
@@ -17,6 +23,12 @@ class DTW(object):
         return dist_matrix[-1, -1]
 
     def train(self, train_data, train_labels):
+        """
+        Trains and constructs DTW vector list
+        :param train_data: matrix of sequences
+        :param train_labels: vector of target labels (not one-hot)
+        :return:
+        """
         _, indices, counts = np.unique(train_labels, return_index=True, return_counts=True)
         for i in range(len(indices)):
             index = indices[i]
@@ -35,7 +47,12 @@ class DTW(object):
             self.vectors.append(train_data[to_add, :])
 
     def test(self, test_data, test_labels):
-        results = []
+        """
+        Calculates accuracy of classification of test_data
+        :param test_data: matrix of sequences
+        :param test_labels: expected labels (not one-hot)
+        :return: Accuracy % of classification
+        """
         acc = 0
         for i in range(len(test_labels)):
             distances = []
@@ -48,4 +65,5 @@ class DTW(object):
 
 
         print("Accuracy", acc / len(test_labels))
+        return acc / len(test_labels)
 

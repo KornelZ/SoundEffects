@@ -46,5 +46,14 @@ class FeatureExtractor(object):
             log.info("In_get_mfcc, delta_mfcc after reshaping %s", mfcc.shape)
         return mfcc
 
+    def get_spectrogram(self, normalize):
+        """
+        Based on A. Nagrani*, J. S. Chung*, A. Zisserman, VoxCeleb: a large-scale speaker identification dataset,
+        INTERSPEECH, 2017
+        :param normalize: normalizes each frequency bin by mean and std
+        :return:
+        """
+        pass
+
 
 
