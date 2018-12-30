@@ -6,7 +6,7 @@ import plots
 class Rnn(object):
 
     def __init__(self, num_inputs, num_classes, layers, dropout, epochs, l2_coef,
-                 learning_rate, batch_size, save_model, save_path, max_seq_len):
+                 learning_rate, batch_size, save_model, save_path, max_seq_len, dense_layers):
         """
         Inits Rnn parameters
         :param num_inputs: size of input vector features
@@ -32,6 +32,7 @@ class Rnn(object):
         self.save_model = save_model
         self.save_path = save_path
         self.max_seq_len = max_seq_len
+        self.dense_layers = dense_layers
 
         self.x = None
         self.y = None
@@ -83,24 +84,25 @@ class Rnn(object):
                     self.y: t_l,
                     self.dropout_keep_prob: self.dropout
                 }
-                _, train_step, train_predictions, t_loss, t_accuracy = self.session.run(
-                    [self.optimizer, self.global_step, self.predictions, self.loss, self.accuracy], feed_dict
+                _, train_step, train_predictions, t_loss, t_accuracy, t_l2_loss, = self.session.run(
+                    [self.optimizer, self.global_step, self.predictions, self.loss, self.accuracy, self.l2_loss], feed_dict
                 )
                 accuracy += t_accuracy
                 loss += t_loss
                 i += 1
-
-            loss = loss / i
-            accuracy = accuracy / i
+            loss /= i
+            accuracy /= i
             print("Step: {}, loss {}, acc {}".format(epoch + 1, loss, accuracy))
+            if (epoch + 1) % 20 == 0:
+                print("L2 loss", t_l2_loss)
             if valid_data is not None and valid_labels is not None:
                 feed_dict = {
                     self.x: valid_data,
                     self.y: valid_labels,
                     self.dropout_keep_prob: 1
                 }
-                _, result, test_loss, test_accuracy, top_5 = self.session.run(
-                    [self.net, self.predictions, self.loss, self.accuracy, self.top_5], feed_dict
+                result, test_loss, test_accuracy, top_5 = self.session.run(
+                    [self.predictions, self.loss, self.accuracy, self.top_5], feed_dict
                 )
                 loss_hist.append((loss, test_loss))
                 acc_hist.append(test_accuracy)
@@ -113,6 +115,7 @@ class Rnn(object):
                     self._save(self.session, epoch)
 
                 print("Best acc: {} at step {}, top 5 {}".format(best_acc, best_epoch + 1, best_top_5))
+        print("Final acc: {} at step {}, top 5 {}".format(best_acc, best_epoch + 1, best_top_5))
         if plot_result:
             plots.plot_epochs(self.epochs, loss_hist, ['r--', 'g--'])
             plots.plot_epochs(self.epochs, acc_hist, 'b--')
@@ -133,8 +136,8 @@ class Rnn(object):
                 self.y: test_labels,
                 self.dropout_keep_prob: 1
             }
-            _, result, test_accuracy = self.session.run(
-                [self.net, self.predictions, self.accuracy], feed_dict
+            result, test_accuracy = self.session.run(
+                [self.predictions, self.accuracy], feed_dict
             )
             print("Test accuracy:", test_accuracy)
             print("Result:", result)
@@ -157,21 +160,16 @@ class Rnn(object):
             )
 
             self.dropout_keep_prob = tf.placeholder(tf.float32, shape=())
-            """Last layer weights and bias"""
-            self.weight = {
-                "out": tf.Variable(tf.truncated_normal(
-                    [self.layers[-1], self.num_classes]
-                ))
-            }
-            self.bias = {
-                "out": tf.Variable(tf.zeros([self.num_classes]))
-            }
 
-            self.l2_reg = tf.constant(0.0) + \
-                          tf.nn.l2_loss(self.weight["out"]) +\
-                          tf.nn.l2_loss(self.bias["out"])
+
+            def dense(x, out_size, act, dropout, use_dropout):
+                dropout = 1.0 - dropout
+                fc = tf.layers.dense(x, out_size, act, use_bias=True)
+                return tf.layers.dropout(fc, rate=dropout, training=use_dropout)
+
 
             def rnn(x, w, b, seq_len):
+
                 rnn_cells = [tf.contrib.rnn.LSTMCell(layer) for layer in self.layers]
                 rnn_cells = [tf.contrib.rnn.DropoutWrapper(cell, output_keep_prob=self.dropout_keep_prob) for cell in rnn_cells]
                 rnn_cells = tf.contrib.rnn.MultiRNNCell(rnn_cells)
@@ -179,23 +177,27 @@ class Rnn(object):
                                            sequence_length=seq_len,
                                            dtype=tf.float32)
                 out = network_util.transpose_to_last_values(out, seq_len)
-                return tf.matmul(out, w["out"]) + b["out"]
+
+                for size in self.dense_layers:
+                    out = dense(out, size, "tanh", self.dropout_keep_prob, self.dropout_keep_prob != 1.0)
+                return dense(out, self.num_classes, None, 0, False)
 
             self.net = rnn(self.x, self.weight, self.bias, self.sequence_length)
             self.predictions = tf.argmax(self.net, axis=1)
+            self.l2_loss = self.l2_coef * sum(tf.nn.l2_loss(v) for v in tf.trainable_variables())
             self.loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
                 logits=self.net, labels=self.y
-            )) + self.l2_coef * self.l2_reg
+            )) + self.l2_loss
             self.accuracy = tf.reduce_mean(
                 tf.cast(tf.equal(self.predictions, tf.argmax(self.y, axis=1)), dtype=tf.float32)
             )
             self.top_5 = tf.reduce_mean(tf.cast(tf.nn.in_top_k(self.net, tf.argmax(self.y, axis=1), 5), dtype=tf.float32))
             self.global_step = tf.Variable(0, trainable=False)
-            self.optimizer = tf.train.AdagradOptimizer(self.learning_rate)\
-                .minimize(self.loss, global_step=self.global_step)
-            #gvs, var = zip(*self.optimizer.compute_gradients(self.loss))
-            #gvs, _ = tf.clip_by_global_norm(gvs, 5.0)
-            #self.optimizer = self.optimizer.apply_gradients(zip(gvs, var), global_step=self.global_step)
+            self.optimizer = tf.train.AdamOptimizer(self.learning_rate)\
+                #.minimize(self.loss, global_step=self.global_step)
+            gvs, var = zip(*self.optimizer.compute_gradients(self.loss))
+            gvs, self.gnorm = tf.clip_by_global_norm(gvs, 1.0)
+            self.optimizer = self.optimizer.apply_gradients(zip(gvs, var), global_step=self.global_step)
             self.saver = tf.train.Saver()
             #Windows GPU crash fix
             config = tf.ConfigProto()
