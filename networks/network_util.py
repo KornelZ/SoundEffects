@@ -32,6 +32,10 @@ def transpose_to_last_values(sequence, length):
     """
     _, max_seq_len, input_size = sequence.shape
     batch_size = tf.shape(sequence)[0]
+    #seq = tf.transpose(sequence, [1, 0, 2])
+    #seq = tf.gather(seq, length - 1)
+    #sp = tf.shape(seq)
+    #return tf.reshape(seq, [sp[1], sp[2]])
     index = tf.range(0, batch_size) * max_seq_len + (length - 1)
     return tf.gather(tf.reshape(sequence, [-1, input_size]), index)
 
@@ -58,8 +62,9 @@ def batch(data, labels, batch_size):
     perm = np.random.permutation(len(labels))
     data = data[perm, :]
     labels = labels[perm]
-    for i in range(0, len(labels), batch_size):
-        if i + batch_size >= len(labels):
-            yield data[i:, :], labels[i:]
-        else:
-            yield data[i:i+batch_size, :], labels[i:i+batch_size]
+    length = len(labels)
+    for i in range(0, length, batch_size):
+        indices = range(i, i+batch_size)
+        yield data.take(indices, mode="wrap", axis=0),\
+              labels.take(indices, mode="wrap", axis=0)
+
