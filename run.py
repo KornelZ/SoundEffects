@@ -1,7 +1,7 @@
 from file_io import wav_io
 from preproc import features
 from networks import rnn, network_util
-from plots import confusion_matrix
+import itertools
 import numpy as np
 import os
 import dtw
@@ -9,6 +9,7 @@ import sys
 
 opts = {
     #general
+    "grid_search": False,
     "path": "F:\\SpeechDatasets\\data\\close",
     "alg": "rnn",
     "trials": 1,
@@ -20,17 +21,18 @@ opts = {
     "num_filters": 26,
     "num_mfcc": 13,
     "use_delta": False,
-    "remove_mfcc": True,
+    "remove_first_coef": True,
     #neural net
-    "dropout": 0.5,
+    "dropout": 0.4,
     "batch_size": 8,
     "lr": 0.001,
     "l2": 0.01,
-    "epochs": 1200,
+    "epochs": 1000,
     "train_size": 3,
     "valid_size": 2,
+    "dense_layers": [],
     #rnn
-    "rnn_layers": [200, 120]
+    "rnn_layers": [200]
 }
 
 def get_mfcc(data):
@@ -40,7 +42,7 @@ def get_mfcc(data):
         num_filters=opts["num_filters"],
         num_mfcc=opts["num_mfcc"],
         use_delta=opts["use_delta"],
-        remove_first_mfcc_coeff=opts["remove_mfcc"],
+        remove_first_mfcc_coeff=opts["remove_first_coef"],
         low_freq=0
     )
     i = 0
@@ -69,15 +71,21 @@ def get_mfcc(data):
 
     def pad(speaker, max_seq_len):
         t = max_seq_len - speaker.shape[0]
+        mean = np.mean(speaker, axis=0)
+        std = np.std(speaker, axis=0)
+        #speaker = (speaker - mean)
+
         return np.pad(speaker, pad_width=((0, t), (0, 0)), mode="constant")
 
     print(i)
     speakers_train = [y for x in speakers_train for y in x]
     speakers_valid = [y for x in speakers_valid for y in x]
     max_seq_len = get_max_seq_len(speakers_train + speakers_valid)
+    print("Max frames :", max_seq_len)
     speakers_train = list(map(lambda x: pad(x, max_seq_len), speakers_train))
     speakers_valid = list(map(lambda x: pad(x, max_seq_len), speakers_valid))
     print(len(speakers_train))
+    print(len(speakers_valid))
     speakers_train = np.stack(speakers_train, axis=0)
     speakers_valid = np.stack(speakers_valid, axis=0)
     num_classes = i
@@ -98,7 +106,8 @@ def run_rnn(train, valid, num_inputs, num_classes):
         batch_size=opts["batch_size"],
         save_model=opts["batch_size"],
         save_path=opts["save_path"],
-        max_seq_len=speakers_train.shape[1]
+        max_seq_len=speakers_train.shape[1],
+        dense_layers=opts["dense_layers"]
     )
     input = speakers_train
 
@@ -125,14 +134,19 @@ def run_dtw(train, valid):
 
 
 def run():
+    print("*" * 20)
+    print("Running with following arguments:")
+    for key in opts:
+        print("{}: {}".format(key, opts[key]))
+    print("*" * 20)
+    
     PATH = opts["path"]
     dirs = [os.path.join(PATH, p) for p in os.listdir(PATH)]
     dirs = [(p, os.listdir(p)) for p in dirs]
     dirs = [[os.path.join(path, filename) for filename in filenames]
             for path, filenames in dirs]
-    print(dirs)
+
     data = [wav_io.read_files(d) for d in dirs]
-    print(data)
     if opts["alg"] == "rnn" or opts["alg"] == "dtw":
         num_inputs = opts["num_mfcc"] if not opts["use_delta"] else 3 * opts["num_mfcc"]
 
@@ -147,6 +161,30 @@ def run():
                     (speakers_valid, labels_valid))
     else:
         raise ValueError("Invalid algorithm {}".format(opts["alg"]))
+
+
+def grid_search():
+    stdout = sys.stdout
+    grid = {
+        "l2": [0.1, 1.0, 0.0],
+        "rnn_layers": [[200], [120], [80]],
+        "dense_layers": [[200], [120], [80]]
+    }
+    keys, values = zip(*grid.items())
+    confs = [dict(zip(keys, v)) for v in itertools.product(*values)]
+
+    for conf in confs:
+        sys.stdout = open("grid_search1.txt", "a+")
+        for key in conf:
+            opts[key] = conf[key]
+        if opts["rnn_layers"][0] == opts["dense_layers"][0]:
+            sys.stdout.close()
+            continue
+        run()
+        sys.stdout.close()
+
+    sys.stdout = stdout
+
 
 
 if __name__ == "__main__":
@@ -164,12 +202,13 @@ if __name__ == "__main__":
     except IndexError:
         print("Usage: {} <arg1-key> <arg2-value>...".format(os.path.basename(__file__)))
         exit(1)
-    print("*" * 20)
-    print("Running with following arguments:")
-    for key in opts:
-        print("{}: {}".format(key, opts[key]))
-    print("*" * 20)
-    run()
+    if opts["grid_search"]:
+        grid_search()
+    else:
+        run()
+
+
+
 
 
 
